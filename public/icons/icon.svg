@@ -1,0 +1,13 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="80" fill="#182821"/>
+  <ellipse cx="256" cy="290" rx="160" ry="110" fill="#2a3d2b" stroke="#F7F1DE" stroke-width="14"/>
+  <rect x="96" y="276" width="320" height="20" rx="10" fill="#F7F1DE"/>
+  <rect x="96" y="276" width="20" height="120" rx="10" fill="#F7F1DE"/>
+  <rect x="396" y="276" width="20" height="120" rx="10" fill="#F7F1DE"/>
+  <rect x="96" y="376" width="320" height="20" rx="10" fill="#F7F1DE"/>
+  <rect x="400" y="260" width="90" height="20" rx="10" fill="#F7F1DE"/>
+  <ellipse cx="256" cy="310" rx="90" ry="60" fill="#F7F1DE" opacity="0.9"/>
+  <circle cx="256" cy="305" r="36" fill="#E8A93A"/>
+  <circle cx="256" cy="305" r="36" fill="#E8A93A"/>
+  <text x="256" y="460" text-anchor="middle" font-family="Georgia,serif" font-size="52" font-weight="bold" fill="#E8A93A">QCH</text>
+</svg>
