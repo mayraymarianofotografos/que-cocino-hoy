@@ -2,9 +2,9 @@
   "name": "¿Qué cocino hoy?",
   "short_name": "¿Qué cocino?",
   "description": "Descubrí qué podés cocinar con los ingredientes que tenés en tu alacena.",
-  "id": "/",
-  "start_url": "/index.html",
-  "scope": "/",
+  "id": "/que-cocino-hoy/",
+  "start_url": "/que-cocino-hoy/",
+  "scope": "/que-cocino-hoy/",
   "display": "standalone",
   "background_color": "#182821",
   "theme_color": "#182821",
@@ -12,30 +12,34 @@
   "lang": "es",
   "icons": [
     {
-      "src": "icons/icon-192.png",
+      "src": "/que-cocino-hoy/icons/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "icons/icon-192.png",
+      "src": "/que-cocino-hoy/icons/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "maskable"
     },
     {
-      "src": "icons/icon-512.png",
+      "src": "/que-cocino-hoy/icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "icons/icon-512.png",
+      "src": "/que-cocino-hoy/icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
     }
   ],
-  "categories": ["food", "lifestyle", "utilities"],
+  "categories": [
+    "food",
+    "lifestyle",
+    "utilities"
+  ],
   "prefer_related_applications": false
 }
