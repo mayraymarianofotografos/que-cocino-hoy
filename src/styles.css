@@ -1183,6 +1183,107 @@ a { color: inherit; }
 }
 
 /* ============================================================
+   RECETAS PAGE
+   ============================================================ */
+.recetas-content {
+  padding: 0 16px 24px;
+}
+.recetas-summary {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+  text-align: center;
+  margin-bottom: 16px;
+}
+.recetas-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.receta-item {
+  background: var(--color-paper);
+  border: 1px solid var(--color-paper-border);
+  border-radius: 12px;
+  padding: 14px 16px;
+  transition: var(--transition);
+}
+.receta-item:active {
+  transform: scale(0.98);
+}
+.receta-item-body {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.receta-item-info {
+  flex: 1;
+  min-width: 0;
+}
+.receta-item-nombre {
+  font-family: var(--font-title);
+  font-size: 1rem;
+  font-weight: bold;
+  color: var(--color-text);
+  margin: 0 0 4px 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.receta-item-preview {
+  font-size: 0.8rem;
+  color: var(--color-muted);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.receta-item-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.receta-action-btn {
+  background: none;
+  border: none;
+  font-size: 1.1rem;
+  padding: 6px;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: var(--transition);
+}
+.receta-action-btn:active {
+  background: rgba(255,255,255,0.1);
+}
+
+/* Form textarea */
+.form-textarea {
+  width: 100%;
+  padding: 13px 14px;
+  border: 2px solid var(--color-paper-border);
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-family: inherit;
+  color: var(--color-text);
+  background: #fff;
+  transition: var(--transition);
+  outline: none;
+  resize: vertical;
+  line-height: 1.5;
+}
+.form-textarea:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px rgba(232,169,58,0.15);
+}
+
+/* Modal grande para formularios largos */
+.modal-sheet-lg {
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+/* ============================================================
    UTILITIES
    ============================================================ */
 .hidden { display: none !important; }
@@ -1203,7 +1304,8 @@ a { color: inherit; }
 /* Smooth scroll */
 .ingredientes-content,
 .resultado-content,
-.ajustes-content { scroll-behavior: smooth; }
+.ajustes-content,
+.recetas-content { scroll-behavior: smooth; }
 
 /* Focus visible */
 :focus-visible {

@@ -3,11 +3,9 @@
  *
  * Estrategia:
  *  - Cache-first para el shell estático (HTML, CSS, JS)
- *  - Network-only para las llamadas a la API de Spoonacular
- *    (no queremos cachear respuestas de recetas)
  */
 
-const CACHE_NAME   = 'qch-shell-v1';
+const CACHE_NAME   = 'qch-shell-v2';
 const SHELL_ASSETS = [
   './',
   './index.html',
@@ -16,11 +14,11 @@ const SHELL_ASSETS = [
   './src/utils/storage.js',
   './src/utils/ingredientMatch.js',
   './src/utils/historial.js',
-  './src/services/spoonacular.js',
   './src/components/components.js',
   './src/pages/home.js',
   './src/pages/ingredientes.js',
   './src/pages/resultado.js',
+  './src/pages/recetas.js',
   './src/pages/ajustes.js',
   './src/app.js',
   './icons/icon-192.png',
@@ -49,15 +47,9 @@ self.addEventListener('activate', event => {
   );
 });
 
-/* ---------- Fetch: cache-first para shell, network para API ---------- */
+/* ---------- Fetch: Stale-While-Revalidate para todo ---------- */
 self.addEventListener('fetch', event => {
   const url = event.request.url;
-
-  // Spoonacular → siempre desde la red
-  if (url.includes('api.spoonacular.com')) {
-    event.respondWith(fetch(event.request));
-    return;
-  }
 
   // Google Fonts → red primero, luego cache
   if (url.includes('fonts.googleapis.com') || url.includes('fonts.gstatic.com')) {
@@ -73,10 +65,15 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // Shell → cache-first
+  // Shell → Stale-While-Revalidate
   event.respondWith(
     caches.match(event.request).then(cached => {
-      return cached || fetch(event.request);
+      const fetchPromise = fetch(event.request).then(networkResponse => {
+        const clone = networkResponse.clone();
+        caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+        return networkResponse;
+      }).catch(() => {});
+      return cached || fetchPromise;
     })
   );
 });

@@ -2,18 +2,17 @@
  * resultado.js — Pantalla de resultado del sorteo
  *
  * Flujo:
- *  1. Al montar, muestra loading skeleton
- *  2. Llama a Spoonacular.sortearReceta()
- *  3. Si hay resultado → muestra receta completa
- *  4. Si no hay resultado → muestra mensaje "sin stock"
- *  5. Si hay error → muestra panel de error
+ *  1. Al montar, parsea ingredientes de cada receta local
+ *  2. Clasifica en completas / casi completas
+ *  3. Elige una al azar
+ *  4. Renderiza receta con ingredientes usados/faltantes y pasos
  */
 
 const ResultadoPageModule = (() => {
 
-  // Estado local de esta pantalla (se resetea en cada navigate)
-  let _receta = null;
-  let _info   = null;
+  let _recetaActual = null;
+  let _vistosEnSesion = [];
+  let _sorteoRequestId = 0;
 
   function render(container) {
     container.innerHTML = `
@@ -25,7 +24,6 @@ const ResultadoPageModule = (() => {
         </header>
 
         <div class="resultado-content" id="resultado-body">
-          <!-- contenido dinámico -->
         </div>
       </div>
     `;
@@ -37,89 +35,144 @@ const ResultadoPageModule = (() => {
     iniciarSorteo();
   }
 
-  async function iniciarSorteo() {
+  function iniciarSorteo() {
     const body = document.getElementById('resultado-body');
     if (!body) return;
 
-    // Loading
-    body.innerHTML = `
-      <div class="loading-result">
-        <div class="spinner"></div>
-        <p>Buscando recetas...</p>
-      </div>
-    `;
+    const currentReqId = ++_sorteoRequestId;
 
-    const apiKey = Storage.getApiKey();
+    const recetas = Storage.getRecetas();
     const ingredientesDisp = Storage.getIngredientesDisponibles();
 
+    if (recetas.length === 0) {
+      if (currentReqId !== _sorteoRequestId) return;
+      renderSinRecetas(body);
+      return;
+    }
+
     if (ingredientesDisp.length === 0) {
+      if (currentReqId !== _sorteoRequestId) return;
       renderSinStock(body);
       return;
     }
 
-    const nombres = ingredientesDisp.map(i => i.nombre);
+    const analisis = analizarRecetas(recetas, ingredientesDisp);
 
-    try {
-      const resultado = await Spoonacular.sortearReceta(nombres, apiKey);
+    if (currentReqId !== _sorteoRequestId) return;
 
-      if (!resultado) {
-        renderSinResultados(body);
-        return;
-      }
+    const completas = analisis.filter(a => a.faltan === 0);
+    const casiCompletas = analisis.filter(a => a.faltan >= 1 && a.faltan <= 2);
 
-      _receta = resultado.receta;
-      _info   = resultado.info;
-
-      renderReceta(body, _receta, _info);
-
-    } catch (err) {
-      renderError(body, err.message);
+    if (completas.length === 0 && casiCompletas.length === 0) {
+      renderSinResultados(body, ingredientesDisp);
+      return;
     }
+
+    // Ponderar: completas tienen 70% de peso, casi completas 30%
+    const completasNoVistos = completas.filter(a => !_vistosEnSesion.includes(a.receta.id));
+    const casiNoVistos = casiCompletas.filter(a => !_vistosEnSesion.includes(a.receta.id));
+
+    let poolPonderado;
+    if (completasNoVistos.length > 0 && casiNoVistos.length > 0) {
+      poolPonderado = [
+        ...completasNoVistos.map(a => ({ ...a, peso: 0.7 / completasNoVistos.length })),
+        ...casiNoVistos.map(a => ({ ...a, peso: 0.3 / casiNoVistos.length })),
+      ];
+    } else if (completasNoVistos.length > 0) {
+      poolPonderado = completasNoVistos.map(a => ({ ...a, peso: 1 / completasNoVistos.length }));
+    } else {
+      poolPonderado = casiNoVistos.map(a => ({ ...a, peso: 1 / casiNoVistos.length }));
+    }
+
+    // Si se vio todo, reiniciar
+    if (poolPonderado.length === 0) {
+      _vistosEnSesion = [];
+      return iniciarSorteo();
+    }
+
+    // Seleccionar por peso
+    const rand = Math.random();
+    let acum = 0;
+    let elegido = poolPonderado[0];
+    for (const item of poolPonderado) {
+      acum += item.peso;
+      if (rand <= acum) { elegido = item; break; }
+    }
+
+    _vistosEnSesion.push(elegido.receta.id);
+    _recetaActual = elegido;
+
+    renderReceta(body, elegido);
+  }
+
+  /**
+   * Analiza cada receta contra los ingredientes disponibles.
+   */
+  function analizarRecetas(recetas, ingredientesDisp) {
+    return recetas.map(receta => {
+      const nombres = IngredientMatch.parseIngredientesReceta(receta.ingredientes);
+      const usados = [];
+      const faltantes = [];
+
+      nombres.forEach(nombre => {
+        const match = IngredientMatch.matchIngredient(nombre, ingredientesDisp);
+        if (match) {
+          usados.push({ nombreReceta: nombre, ingredienteLocal: match });
+        } else {
+          faltantes.push({ nombreReceta: nombre });
+        }
+      });
+
+      return { receta, usados, faltantes, faltan: faltantes.length };
+    });
   }
 
   /* ---------- Render: receta encontrada ---------- */
-  function renderReceta(body, receta, info) {
-    const historial   = Storage.getHistorial();
-    const entrada     = historial[receta.id] || null;
-    const textoHist   = Historial.textoHistorial(entrada);
 
-    const estaCompleta  = receta.missedIngredientCount === 0;
-    const selloClass    = estaCompleta ? '' : 'falta-poco';
-    const selloText     = estaCompleta ? '✓ PARA HOY' : '⚠ FALTA POCO';
+  function renderReceta(body, analisis) {
+    const { receta, usados, faltantes, faltan } = analisis;
+    const historial = Storage.getHistorial();
+    const entrada = historial[receta.id] || null;
+    const textoHist = Historial.textoHistorial(entrada);
 
-    const instrucciones = Spoonacular.extractInstructions(info);
-    const instrHTML     = instrucciones
+    const estaCompleta = faltan === 0;
+    const selloClass = estaCompleta ? '' : 'falta-poco';
+    const selloText = estaCompleta ? '✓ PARA HOY' : '⚠ FALTA POCO';
+
+    const pasosArr = (receta.pasos || '')
       .split('\n')
-      .filter(l => l.trim())
+      .map(l => l.replace(/^\d+[\.\)]\s*/, '').trim())
+      .filter(l => l.length > 0);
+
+    const pasosHTML = pasosArr
       .map(l => `<p>${Components.escapeHtml(l)}</p>`)
       .join('');
 
-    const usedList = (receta.usedIngredients || [])
-      .map(i => `
+    const usedList = usados
+      .map(u => `
         <div class="ing-list-item">
           <span class="ing-check ok">✓</span>
-          <span>${Components.escapeHtml(i.name)}</span>
+          <span>${Components.escapeHtml(u.nombreReceta)}</span>
         </div>`)
       .join('');
 
-    const missedList = (receta.missedIngredients || [])
-      .map(i => `
+    const missedList = faltantes
+      .map(f => `
         <div class="ing-list-item missing">
           <span class="ing-check miss">✗</span>
-          <span>${Components.escapeHtml(i.name)}</span>
+          <span>${Components.escapeHtml(f.nombreReceta)}</span>
         </div>`)
       .join('');
 
-    // Sección "ir a comprar"
-    const faltanteItems = (receta.missedIngredients || [])
-      .map(i => `<div class="falta-item">🛒 ${Components.escapeHtml(i.name)}</div>`)
+    const faltanteItems = faltantes
+      .map(f => `<div class="falta-item">🛒 ${Components.escapeHtml(f.nombreReceta)}</div>`)
       .join('');
 
-    const faltaSection = receta.missedIngredientCount > 0 ? `
+    const faltaSection = faltan > 0 ? `
       <div class="falta-section">
         <div class="falta-header" id="falta-toggle-btn" role="button" tabindex="0"
              aria-expanded="false">
-          <span>🛒 Lo que falta (${receta.missedIngredientCount})</span>
+          <span>🛒 Lo que falta (${faltan})</span>
           <span class="falta-toggle">▼</span>
         </div>
         <div class="falta-body" id="falta-body">
@@ -128,26 +181,24 @@ const ResultadoPageModule = (() => {
       </div>
     ` : '';
 
-    const fotoEl = info.image
-      ? `<img class="receta-foto" src="${info.image}" alt="${Components.escapeHtml(info.title)}"
+    const fotoEl = receta.imagenUrl
+      ? `<img class="receta-foto" src="${Components.escapeHtml(receta.imagenUrl)}" alt="${Components.escapeHtml(receta.nombre)}"
              loading="lazy" onerror="this.parentNode.innerHTML='<div class=\\'receta-foto-placeholder\\'>🍽️</div>'" />`
       : `<div class="receta-foto-placeholder">🍽️</div>`;
 
     body.innerHTML = `
-      <!-- Receta card -->
       <div class="receta-card">
         <div style="position:relative;">
           ${fotoEl}
           <div class="sello ${selloClass}">${selloText}</div>
         </div>
         <div class="receta-body">
-          <h2 class="receta-nombre">${Components.escapeHtml(info.title || receta.title)}</h2>
+          <h2 class="receta-nombre">${Components.escapeHtml(receta.nombre)}</h2>
           <p class="receta-historial">
             <span class="hist-icon"></span>
             ${textoHist}
           </p>
 
-          <!-- Ingredientes -->
           <div class="receta-ingredientes">
             <h3>Ingredientes</h3>
             <div class="ing-list">
@@ -158,83 +209,84 @@ const ResultadoPageModule = (() => {
 
           <hr class="ticket-divider" />
 
-          <!-- Instrucciones -->
           <div class="instrucciones-section">
             <h3>Preparación</h3>
-            <div class="instrucciones-body">${instrHTML}</div>
+            <div class="instrucciones-body">${pasosHTML}</div>
           </div>
         </div>
       </div>
 
-      <!-- Falta section -->
       ${faltaSection}
 
-      <!-- Acciones -->
       <div class="resultado-actions">
         <button class="btn-positive" id="btn-cocine">✓ Cociné esto</button>
         <button class="btn-secondary" id="btn-otra">🎲 Buscar otra</button>
       </div>
     `;
 
-    // Toggle "lo que falta"
     const faltaBtn = document.getElementById('falta-toggle-btn');
     if (faltaBtn) {
       faltaBtn.addEventListener('click', () => {
-        const bodyEl   = document.getElementById('falta-body');
-        const isOpen   = bodyEl.classList.toggle('open');
+        const bodyEl = document.getElementById('falta-body');
+        const isOpen = bodyEl.classList.toggle('open');
         faltaBtn.classList.toggle('open', isOpen);
         faltaBtn.setAttribute('aria-expanded', isOpen);
       });
     }
 
-    // "Cociné esto"
-    document.getElementById('btn-cocine').addEventListener('click', () => {
-      registrarCocinado(receta, info);
+    document.getElementById('btn-cocine').addEventListener('click', (e) => {
+      e.target.disabled = true;
+      registrarCocinado(analisis);
     });
 
-    // "Buscar otra"
     document.getElementById('btn-otra').addEventListener('click', () => {
-      _receta = null;
-      _info   = null;
+      _recetaActual = null;
       iniciarSorteo();
     });
   }
 
   /* ---------- Acción: registrar cocinado ---------- */
-  function registrarCocinado(receta, info) {
-    const usedIngredients = receta.usedIngredients || [];
-    const ingredientesLocales = Storage.getIngredientes();
 
-    const cambios = [];
+  function registrarCocinado(analisis) {
+    const { receta, usados } = analisis;
 
-    usedIngredients.forEach(spoonIng => {
-      const local = IngredientMatch.matchIngredient(spoonIng.name, ingredientesLocales);
-      if (!local) return; // sin match → no romper nada
+    usados.forEach(u => {
+      const local = u.ingredienteLocal;
+      if (!local) return;
 
       if (local.esContable) {
-        // Restar cantidad (mínimo 0, redondeado arriba, al menos 1)
-        const restar = Math.max(1, Math.ceil(spoonIng.amount || 1));
-        const nuevaCantidad = Math.max(0, local.cantidad - restar);
+        const nuevaCantidad = Math.max(0, local.cantidad - 1);
         Storage.updateIngrediente(local.id, { cantidad: nuevaCantidad });
-        cambios.push({ ...local, cantidad: nuevaCantidad });
       } else {
-        // Marcar como no disponible
         Storage.updateIngrediente(local.id, { disponible: false });
-        cambios.push({ ...local, disponible: false });
       }
     });
 
-    // Registrar en historial
-    const nombreReceta = info.title || receta.title;
-    Storage.registrarCocinado(String(receta.id), nombreReceta);
-
+    Storage.registrarCocinado(String(receta.id), receta.nombre);
     Components.showToast('Stock actualizado ✓');
-
-    // Volver a home después de un momento
     setTimeout(() => App.navigate('home'), 1600);
   }
 
+  /* ---------- Render: sin recetas ---------- */
+
+  function renderSinRecetas(body) {
+    body.innerHTML = `
+      <div class="sin-resultados">
+        <span class="sr-icon">📖</span>
+        <h2>Sin recetas cargadas</h2>
+        <p>Agregá recetas desde "Mis recetas" para poder sortear.</p>
+        <button class="btn-secondary" id="btn-ir-recetas" style="margin-top:8px;width:auto;padding:12px 24px;">
+          Ir a Mis recetas
+        </button>
+      </div>
+    `;
+    document.getElementById('btn-ir-recetas').addEventListener('click', () => {
+      App.navigate('recetas');
+    });
+  }
+
   /* ---------- Render: sin stock ---------- */
+
   function renderSinStock(body) {
     body.innerHTML = `
       <div class="sin-resultados">
@@ -252,37 +304,22 @@ const ResultadoPageModule = (() => {
     });
   }
 
-  /* ---------- Render: sin resultados de API ---------- */
-  function renderSinResultados(body) {
+  /* ---------- Render: sin resultados ---------- */
+
+  function renderSinResultados(body, ingredientesDisp) {
+    const disponibles = ingredientesDisp.map(i => i.nombre).join(', ');
     body.innerHTML = `
       <div class="sin-resultados">
         <span class="sr-icon">🤷</span>
         <h2>No hay recetas disponibles</h2>
-        <p>Spoonacular no encontró ninguna receta completa ni casi completa con tu stock actual.
-           Probá agregar más ingredientes o activar los que tenés agotados.</p>
+        <p>Ninguna de tus recetas es completa ni casi completa con los ingredientes que tenés: <strong>${Components.escapeHtml(disponibles)}</strong>.
+           Probá agregar más ingredientes o cargar nuevas recetas.</p>
         <button class="btn-secondary" id="btn-volver-home" style="margin-top:8px;width:auto;padding:12px 24px;">
           Volver al inicio
         </button>
       </div>
     `;
     document.getElementById('btn-volver-home').addEventListener('click', () => {
-      App.navigate('home');
-    });
-  }
-
-  /* ---------- Render: error de API ---------- */
-  function renderError(body, mensaje) {
-    body.innerHTML = `
-      <div class="error-panel">
-        <span class="ep-icon">⚠️</span>
-        <h3>Algo salió mal</h3>
-        <p>${Components.escapeHtml(mensaje)}</p>
-        <button class="btn-secondary" id="btn-volver-error" style="margin-top:4px;width:auto;padding:12px 24px;">
-          Volver al inicio
-        </button>
-      </div>
-    `;
-    document.getElementById('btn-volver-error').addEventListener('click', () => {
       App.navigate('home');
     });
   }

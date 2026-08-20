@@ -16,7 +16,7 @@ const HomePageModule = (() => {
     const numEl  = document.getElementById('stock-num');
     const totEl  = document.getElementById('stock-total');
     const lblEl  = document.getElementById('stock-label');
-    if (!numEl) return;
+    if (!numEl || !totEl || !lblEl) return;
     const { total, disponibles } = getStockCounts();
     numEl.textContent  = disponibles;
     totEl.textContent  = total;
@@ -25,10 +25,9 @@ const HomePageModule = (() => {
   }
 
   function render(container) {
-    const apiKey   = Storage.getApiKey();
-    const tieneKey = !!apiKey;
     const { total, disponibles } = getStockCounts();
     const plural = disponibles === 1 ? 'ingrediente disponible' : 'ingredientes disponibles';
+    const recetasCount = Storage.getRecetas().length;
 
     container.innerHTML = `
       <div id="page-home" class="page active">
@@ -57,26 +56,20 @@ const HomePageModule = (() => {
 
             <hr class="ticket-divider" />
 
-            <!-- Aviso API key faltante -->
-            ${!tieneKey ? `
-              <div class="api-key-warning" id="api-key-warning">
-                <span class="warn-icon">⚠️</span>
-                <p>
-                  <strong>Falta la API key de Spoonacular.</strong>
-                  Andá a <strong>Ajustes</strong> para cargarla y poder sortear recetas.
-                </p>
-              </div>
-            ` : ''}
-
             <!-- Botón sortear -->
             <button
               id="btn-sortear"
               class="btn-primary"
-              ${!tieneKey ? 'disabled' : ''}
+              ${recetasCount === 0 ? 'disabled' : ''}
               aria-label="Sortear receta con ingredientes disponibles"
             >
               🎲 SORTEAR RECETA
             </button>
+            ${recetasCount === 0 ? `
+              <p style="font-size:0.8rem;color:var(--text-secondary);margin-top:8px;text-align:center;">
+                Agregá recetas desde "Mis recetas" para poder sortear.
+              </p>
+            ` : ''}
           </div>
 
           <!-- Quick links -->
@@ -87,11 +80,17 @@ const HomePageModule = (() => {
               <span class="ql-label">Stock</span>
               <span class="ql-title">Mis ingredientes</span>
             </button>
+            <button class="quick-link-card" id="ql-recetas"
+                    aria-label="Ir a Mis Recetas">
+              <span class="ql-icon">📖</span>
+              <span class="ql-label">${recetasCount} receta${recetasCount !== 1 ? 's' : ''}</span>
+              <span class="ql-title">Mis recetas</span>
+            </button>
             <button class="quick-link-card" id="ql-ajustes"
                     aria-label="Ir a Ajustes">
               <span class="ql-icon">⚙️</span>
               <span class="ql-label">Configuración</span>
-              <span class="ql-title">Ajustes y API key</span>
+              <span class="ql-title">Ajustes</span>
             </button>
           </div>
         </div>
@@ -101,17 +100,17 @@ const HomePageModule = (() => {
       </div>
     `;
 
-    // Nav
     Components.renderBottomNav('home');
 
-    // Botón sortear
     document.getElementById('btn-sortear').addEventListener('click', () => {
       App.navigate('resultado');
     });
 
-    // Quick links
     document.getElementById('ql-ingredientes').addEventListener('click', () => {
       App.navigate('ingredientes');
+    });
+    document.getElementById('ql-recetas').addEventListener('click', () => {
+      App.navigate('recetas');
     });
     document.getElementById('ql-ajustes').addEventListener('click', () => {
       App.navigate('ajustes');

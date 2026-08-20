@@ -14,6 +14,7 @@ const App = (() => {
     ingredientes: IngredientesPageModule,
     resultado:    ResultadoPageModule,
     ajustes:      AjustesPageModule,
+    recetas:      RecetasPageModule,
   };
 
   let currentPage = null;
@@ -38,6 +39,10 @@ const App = (() => {
     }
 
     currentPage = pageName;
+    
+    // Destruir cualquier modal abierto que haya quedado fuera de #app
+    document.querySelectorAll('.modal-overlay').forEach(o => o.remove());
+
     container.innerHTML = '';
     module.render(container);
 
