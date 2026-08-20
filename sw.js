@@ -3,9 +3,10 @@
  *
  * Estrategia:
  *  - Cache-first para el shell estático (HTML, CSS, JS)
+ *  - Stale-While-Revalidate para Google Fonts
  */
 
-const CACHE_NAME   = 'qch-shell-v2';
+const CACHE_NAME   = 'qch-shell-v3';
 const SHELL_ASSETS = [
   './',
   './index.html',
@@ -45,6 +46,13 @@ self.addEventListener('activate', event => {
       )
     ).then(() => self.clients.claim())
   );
+});
+
+/* ---------- Message: skip waiting ---------- */
+self.addEventListener('message', event => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 /* ---------- Fetch: Stale-While-Revalidate para todo ---------- */
